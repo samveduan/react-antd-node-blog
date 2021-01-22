@@ -2,7 +2,7 @@ import React, { Component } from 'react'
 import { Table, Card, Modal, Button, Form, Input, notification } from 'antd'
 import axios from 'axios'
 import qs from 'qs'
-import { PlusOutlined, MinusOutlined } from '@ant-design/icons';
+import { PlusOutlined, MinusOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 
 // react-draft-wysiwyg begin
 import { EditorState, convertToRaw, ContentState } from 'draft-js';
@@ -12,6 +12,8 @@ import htmlToDraft from 'html-to-draftjs';
 import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css'
 import './react-draft-wysiwyg.less'
 // react-draft-wysiwyg end
+
+const { confirm } = Modal;
 
 const layout = {
     labelCol: {
@@ -27,8 +29,8 @@ export default class Home extends Component {
         showRichText: false, // react-draft-wysiwyg
         editorContent: '', // react-draft-wysiwyg
         editorState: '', // react-draft-wysiwyg
-        selectedRowKeys: [], // è¡¨æ ¼é€‰æ‹©é¡¹Keys
-        selectedRows: [], // è¡¨æ ¼é€‰æ‹©é¡¹Rows
+        selectedRowKeys: [], // ±í¸ñÑ¡ÔñÏîKeys
+        selectedRows: [], // ±í¸ñÑ¡ÔñÏîRows
         tableData: [],
         total: 0, // for Pagination
         columns: [
@@ -38,17 +40,20 @@ export default class Home extends Component {
                 width: 30,
             },
             {
-                title: 'æ ‡é¢˜',
+                title: '±êÌâ',
                 dataIndex: 'title',
                 width: 500,
                 render: (text, record) => <a href="javascript: void(0)" target="_self" onClick={() => this.handleShowDetailBlog(record.id)}>{text}</a>
             },
             {
-                title: 'å†…å®¹',
-                dataIndex: 'content'
+                title: 'ÄÚÈİ',
+                dataIndex: 'content',
+                render(text, record) {
+                    return <div dangerouslySetInnerHTML={{ __html: record.content }} style={{}} />
+                }
             },
             {
-                title: 'å‘å¸ƒæ—¶é—´',
+                title: '·¢²¼Ê±¼ä',
                 dataIndex: 'datetime'
             },
         ],
@@ -84,19 +89,34 @@ export default class Home extends Component {
             editorState
         });
     };
+
+    // Í¼Æ¬ÉÏ´«
+    uploadImageCallBack = file => {
+        const formData = new FormData();
+        formData.append('pic-upload', file);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'http://localhost:5555/api/upload');
+        xhr.setRequestHeader('Access-Control-Allow-Origin', '*');
+        xhr.setRequestHeader('Access-Control-Allow-Headers', 'X-Requested-With');
+        xhr.setRequestHeader('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
+        xhr.send(formData);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+                console.log(xhr.status);
+            }
+        }
+    }
     // @react-draft-wysiwyg end
 
     onTableSelectChange = (selectedRowKeys, selectedRows) => {
-        console.log('selectedRowKeys changed: ', selectedRowKeys);
-        console.log('selectedRows changed: ', selectedRows);
         this.setState({ selectedRowKeys, selectedRows });
     };
 
     /**
-     * è¡¨æ ¼
+     * ±í¸ñ
      */
 
-    // è·å–è¡¨æ ¼æ•°æ®
+    // »ñÈ¡±í¸ñÊı¾İ
     getData(pageNumber, pageSize) {
         axios.get(`http://localhost:5555/api/blog_list/?pageSize=${pageSize}&pageNumber=${pageNumber}&sortName=id&sortOrder=desc&_=1595230808893`).then((resp) => {
             let ajaxData = [];
@@ -105,7 +125,7 @@ export default class Home extends Component {
                     key: resp.data.rows[i].id,
                     id: resp.data.rows[i].id,
                     title: resp.data.rows[i].title,
-                    content: resp.data.rows[i].content.substring(0, 54),
+                    content: resp.data.rows[i].content.replace(/<[^>]*>|<\/[^>]*>/gm, "").substring(0, 54),
                     datetime: resp.data.rows[i].datetime,
                 });
             }
@@ -127,7 +147,7 @@ export default class Home extends Component {
     };
 
     /**
-     * æ·»åŠ modal
+     * Ìí¼Ómodal
      */
 
     // for modal
@@ -177,52 +197,65 @@ export default class Home extends Component {
     }
 
     /**
-     * åˆ é™¤blog
+     * É¾³ıblog
      */
     onDeleteAdministrators = () => {
         let len = this.state.selectedRowKeys.length;
+        const _this = this;
 
         if (len === 0) {
             notification['error']({
-                message: 'é”™è¯¯æç¤º',
-                description: 'è¯·é€‰æ‹©è¦åˆ é™¤çš„æ–‡ç« ï¼',
+                message: '´íÎóÌáÊ¾',
+                description: 'ÇëÑ¡ÔñÒªÉ¾³ıµÄÎÄÕÂ£¡',
             })
         } else {
-            const params = {
-                idArr: JSON.stringify(this.state.selectedRowKeys)
-            }
+            confirm({
+                title: 'È·¶¨É¾³ıÑ¡ÔñµÄÎÄÕÂÂğ?',
+                icon: <ExclamationCircleOutlined />,
+                content: '',
+                okText: "È·ÈÏ",
+                cancelText: "È¡Ïû",
+                onOk() {
+                    // É¾³ı begin
+                    const params = {
+                        idArr: JSON.stringify(_this.state.selectedRowKeys)
+                    }
 
-            const _this = this;
+                    axios.post(`http://localhost:5555/api/delete_blogs`, qs.stringify(params)).then((resp) => {
+                        if (resp.data.ret) {
+                            notification['success']({
+                                message: '³É¹¦ÌáÊ¾',
+                                description: resp.data.msg,
+                            })
 
-            axios.post(`http://localhost:5555/api/delete_blogs`, qs.stringify(params)).then((resp) => {
-                if (resp.data.ret) {
-                    notification['success']({
-                        message: 'æˆåŠŸæç¤º',
-                        description: resp.data.msg,
-                    })
-
-                    this.pageNum = 1;
-                    _this.getData(this.pageNum, this.pageSize);
-                } else {
-                    notification['error']({
-                        message: 'é”™è¯¯æç¤º',
-                        description: resp.data.msg,
-                    })
-                }
-            }, (err) => {
-                notification['error']({
-                    message: 'é”™è¯¯æç¤º',
-                    description: 'ç½‘ç»œé”™è¯¯ï¼Œåˆ é™¤å¤±è´¥ï¼'
-                })
+                            _this.pageNum = 1;
+                            _this.getData(_this.pageNum, _this.pageSize);
+                        } else {
+                            notification['error']({
+                                message: '´íÎóÌáÊ¾',
+                                description: resp.data.msg,
+                            })
+                        }
+                    }, (err) => {
+                        notification['error']({
+                            message: '´íÎóÌáÊ¾',
+                            description: 'ÍøÂç´íÎó£¬É¾³ıÊ§°Ü£¡'
+                        })
+                    });
+                    // É¾³ı end
+                },
+                onCancel() {
+                    console.log('Cancel');
+                },
             });
         }
     }
 
-    // è¡¨å•ç›¸å…³
-    addModalFormRef = React.createRef(); // å®šä¹‰ä¸€ä¸ªè¡¨å•
+    // ±íµ¥Ïà¹Ø
+    addModalFormRef = React.createRef(); // ¶¨ÒåÒ»¸ö±íµ¥
 
     /**
-     * æ˜¾ç¤ºblog Modal
+     * ÏÔÊ¾blog Modal
      */
     handleShowDetailBlog = (id) => {
         axios.get(`http://localhost:5555/api/get_blog_detail?id=${id}`, {}).then((resp) => {
@@ -252,28 +285,28 @@ export default class Home extends Component {
     }
 
     /**
-     * é’©å­å‡½æ•°
+     * ¹³×Óº¯Êı
      */
     componentDidMount() {
         this.getData(1, 10);
     }
 
     render() {
-        // æ§åˆ¶è¡¨æ ¼é€‰æ‹©
+        // ¿ØÖÆ±í¸ñÑ¡Ôñ
         const rowSelection = {
             selectedRowKeys: this.state.selectedRowKeys,
             onChange: this.onTableSelectChange
         };
 
         return (<>
-            <Card title="åšå®¢åˆ—è¡¨" extra={<span><Button type="primary" ghost size="small" icon={<PlusOutlined />} style={{ marginRight: 15 }} onClick={this.showAddModal}>æ·»åŠ </Button><Button type="primary" ghost size="small" icon={<MinusOutlined />} onClick={() => { this.onDeleteAdministrators() }}>åˆ é™¤</Button></span>} style={{ width: '100%' }}>
+            <Card title="²©¿ÍÁĞ±í" extra={<span><Button type="primary" ghost size="small" icon={<PlusOutlined />} style={{ marginRight: 15 }} onClick={this.showAddModal}>Ìí¼Ó</Button><Button type="primary" ghost size="small" icon={<MinusOutlined />} onClick={() => { this.onDeleteAdministrators() }}>É¾³ı</Button></span>} style={{ width: '100%' }}>
                 <Table
                     onRow={record => {
                         return {
-                            onClick: event => { console.log(record) }, // ç‚¹å‡»è¡Œ
+                            onClick: event => { console.log(record) }, // µã»÷ĞĞ
                             onDoubleClick: event => { },
                             onContextMenu: event => { },
-                            onMouseEnter: event => { }, // é¼ æ ‡ç§»å…¥è¡Œ
+                            onMouseEnter: event => { }, // Êó±êÒÆÈëĞĞ
                             onMouseLeave: event => { },
                         };
                     }}
@@ -287,7 +320,7 @@ export default class Home extends Component {
                         defaultPageSize: 10,
                         showSizeChanger: true,
                         showQuickJumper: true,
-                        showTotal: (total, range) => `å…± ${total} æ¡`,
+                        showTotal: (total, range) => `¹² ${total} Ìõ`,
                         onChange: this.onChange
                     }}
                     bordered
@@ -295,47 +328,59 @@ export default class Home extends Component {
                 </Table>
 
                 <Modal
-                    title="åˆ›å»º"
+                    title="´´½¨"
                     visible={this.state.addModalVisible}
                     width={800}
                     onOk={this.addModalHandleOk}
                     onCancel={this.addModalHandCancel}
-                    okText="ç¡®è®¤"
-                    cancelText="å–æ¶ˆ"
+                    okText="È·ÈÏ"
+                    cancelText="È¡Ïû"
                     maskClosable={false}
                     destroyOnClose={true}
                 >
                     <Form {...layout} ref={this.addModalFormRef} name="control-ref" preserve={false}>
-                        <Form.Item label="æ ‡é¢˜" style={{ marginBottom: 0 }}>
+                        <Form.Item label="±êÌâ" style={{ marginBottom: 0 }}>
                             <Form.Item
                                 name="title"
                                 style={{ display: 'inline-block', width: 'calc(100% - 8px)', marginRight: 15 }}
                                 rules={[
                                     {
                                         required: true,
-                                        message: "æ ‡é¢˜ä¸èƒ½ä¸ºç©º"
+                                        message: "±êÌâ²»ÄÜÎª¿Õ"
                                     }
                                 ]}
                             >
                                 <Input />
                             </Form.Item>
                         </Form.Item>
-                        <Form.Item label="å†…å®¹" style={{ marginBottom: 0 }}>
+                        <Form.Item label="ÄÚÈİ" style={{ marginBottom: 0 }}>
                             <Form.Item
                                 name="content"
                                 style={{ display: 'inline-block', width: 'calc(100% - 8px)' }}
                                 rules={[
                                     {
                                         required: true,
-                                        message: "å†…å®¹ä¸èƒ½ä¸ºç©º"
+                                        message: "ÄÚÈİ²»ÄÜÎª¿Õ"
                                     }
                                 ]}
                             >
                                 <Editor
                                     editorState={this.state.editorState}
+                                    localization={{ locale: 'zh' }}
                                     wrapperClassName="demo-wrapper"
                                     editorClassName="demo-editor"
                                     onEditorStateChange={this.onEditorStateChange}
+                                    toolbar={{
+                                        image: {
+                                            urlEnabled: true,
+                                            uploadEnabled: true,
+                                            alignmentEnabled: true,   // ÊÇ·ñÏÔÊ¾ÅÅÁĞ°´Å¥ Ïàµ±ÓÚtext-align
+                                            uploadCallback: this.uploadImageCallBack,
+                                            previewImage: true,
+                                            inputAccept: 'image/*',
+                                            alt: { present: false, mandatory: false, previewImage: true }
+                                        },
+                                    }}
                                 />
                                 {/* <TextArea rows={4} /> */}
                             </Form.Item>
@@ -344,13 +389,13 @@ export default class Home extends Component {
                 </Modal>
 
                 <Modal
-                    title="è¯¦æƒ…"
+                    title="ÏêÇé"
                     visible={this.state.showBlogModalVisible}
                     width={800}
                     onOk={this.handleShowBlogModalHandleOk}
                     onCancel={this.handleShowBlogModalHandleCancel}
-                    okText="ç¡®å®š"
-                    cancelText="å–æ¶ˆ"
+                    okText="È·¶¨"
+                    cancelText="È¡Ïû"
                     maskClosable={false}
                     destroyOnClose={true}
                     footer={null}
