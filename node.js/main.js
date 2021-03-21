@@ -16,8 +16,8 @@ app.use(bodyParser.json())
 const connection = mysql.createConnection({
     host: 'localhost',
     user: 'root',
-    password: '12345678',
-    database: 'react-ts-blog'
+    password: '666123',
+    database: 'react-node-blog'
 });
 
 connection.connect();
